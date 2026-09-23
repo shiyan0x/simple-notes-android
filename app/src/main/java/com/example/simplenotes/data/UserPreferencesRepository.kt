@@ -15,6 +15,7 @@ class UserPreferencesRepository(private val context: Context) {
 
     private object PreferencesKeys {
         val THEME_MODE = stringPreferencesKey("theme_mode")
+        val DEFAULT_NOTE_COLOR = stringPreferencesKey("default_note_color")
     }
 
     // Values: "system", "light", "dark"
@@ -23,9 +24,21 @@ class UserPreferencesRepository(private val context: Context) {
             preferences[PreferencesKeys.THEME_MODE] ?: "system"
         }
 
+    // Values: "DEFAULT", "RED", "ORANGE", "YELLOW", "GREEN", "BLUE", "PURPLE"
+    val defaultNoteColor: Flow<String> = context.dataStore.data
+        .map { preferences ->
+            preferences[PreferencesKeys.DEFAULT_NOTE_COLOR] ?: "DEFAULT"
+        }
+
     suspend fun setThemeMode(mode: String) {
         context.dataStore.edit { preferences ->
             preferences[PreferencesKeys.THEME_MODE] = mode
+        }
+    }
+
+    suspend fun setDefaultNoteColor(colorHex: String) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.DEFAULT_NOTE_COLOR] = colorHex
         }
     }
 }

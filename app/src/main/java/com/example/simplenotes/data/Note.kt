@@ -9,5 +9,9 @@ data class Note(
     val id: Long = 0,
     val title: String,
     val content: String,
-    val updatedAt: Long = System.currentTimeMillis()
+    val updatedAt: Long = System.currentTimeMillis(),
+    val isPinned: Boolean = false,
+    val colorHex: String = "DEFAULT",
+    val isChecklist: Boolean = false,
+    val checklistJson: String = ""
 )

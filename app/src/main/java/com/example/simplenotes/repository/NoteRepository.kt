@@ -42,4 +42,12 @@ class NoteRepository(private val noteDao: NoteDao) {
     suspend fun deleteNoteById(id: Long) {
         noteDao.deleteNoteById(id)
     }
+
+    suspend fun togglePinNote(note: Note) {
+        noteDao.updateNote(note.copy(isPinned = !note.isPinned))
+    }
+
+    suspend fun updateNoteColor(note: Note, colorHex: String) {
+        noteDao.updateNote(note.copy(colorHex = colorHex))
+    }
 }

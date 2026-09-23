@@ -3,6 +3,7 @@ package com.example.simplenotes.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.example.simplenotes.data.ChecklistItem
 import com.example.simplenotes.data.Note
 import com.example.simplenotes.data.UserPreferencesRepository
 import com.example.simplenotes.repository.NoteRepository
@@ -41,6 +42,15 @@ class NotesViewModel(
             initialValue = "system"
         )
 
+    val defaultNoteColor: StateFlow<String> = userPreferencesRepository.defaultNoteColor
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = "DEFAULT"
+        )
+
+    private var lastDeletedNote: Note? = null
+
     fun onSearchQueryChanged(newQuery: String) {
         _searchQuery.value = newQuery
     }
@@ -55,45 +65,103 @@ class NotesViewModel(
         }
     }
 
+    fun setDefaultNoteColor(colorHex: String) {
+        viewModelScope.launch {
+            userPreferencesRepository.setDefaultNoteColor(colorHex)
+        }
+    }
+
     suspend fun getNoteById(id: Long): Note? {
         return repository.getNoteById(id)
     }
 
-    suspend fun saveNote(id: Long, titleInput: String, contentInput: String): Long? {
+    suspend fun saveNote(
+        id: Long,
+        titleInput: String,
+        contentInput: String,
+        isPinned: Boolean = false,
+        colorHex: String = "DEFAULT",
+        isChecklist: Boolean = false,
+        checklistJson: String = ""
+    ): Long? {
         val trimmedTitle = titleInput.trim()
         val trimmedContent = contentInput.trim()
 
-        // If both title and content are completely empty, don't save an empty note
-        if (trimmedTitle.isEmpty() && trimmedContent.isEmpty()) {
+        // If both title, content, and checklist items are completely empty
+        if (trimmedTitle.isEmpty() && trimmedContent.isEmpty() && checklistJson.isEmpty()) {
             if (id != 0L) {
-                // If it was an existing note and user wiped all text, delete it
                 repository.deleteNoteById(id)
             }
             return null
         }
 
-        // Rule 11: If user does not enter a title, automatically use "Untitled Note"
         val finalTitle = if (trimmedTitle.isEmpty()) "Untitled Note" else trimmedTitle
 
         val note = Note(
             id = id,
             title = finalTitle,
-            content = contentInput, // Preserve formatting and whitespace in content
-            updatedAt = System.currentTimeMillis()
+            content = contentInput,
+            updatedAt = System.currentTimeMillis(),
+            isPinned = isPinned,
+            colorHex = colorHex,
+            isChecklist = isChecklist,
+            checklistJson = checklistJson
         )
 
         return repository.saveNote(note)
     }
 
-    fun deleteNote(note: Note) {
+    fun togglePin(note: Note) {
         viewModelScope.launch {
-            repository.deleteNote(note)
+            repository.togglePinNote(note)
         }
     }
 
-    fun deleteNoteById(id: Long) {
+    fun updateNoteColor(note: Note, colorHex: String) {
         viewModelScope.launch {
-            repository.deleteNoteById(id)
+            repository.updateNoteColor(note, colorHex)
+        }
+    }
+
+    fun deleteNoteWithUndo(note: Note, onDeleted: () -> Unit) {
+        lastDeletedNote = note
+        viewModelScope.launch {
+            repository.deleteNote(note)
+            onDeleted()
+        }
+    }
+
+    fun deleteNoteByIdWithUndo(id: Long, onDeleted: () -> Unit) {
+        viewModelScope.launch {
+            val note = repository.getNoteById(id)
+            if (note != null) {
+                lastDeletedNote = note
+                repository.deleteNote(note)
+            }
+            onDeleted()
+        }
+    }
+
+    fun restoreLastDeletedNote() {
+        val noteToRestore = lastDeletedNote ?: return
+        viewModelScope.launch {
+            repository.saveNote(noteToRestore)
+            lastDeletedNote = null
+        }
+    }
+
+    companion object {
+        fun calculateWordAndCharCount(text: String): String {
+            val trimmed = text.trim()
+            val charCount = trimmed.length
+            val wordCount = if (trimmed.isEmpty()) 0 else trimmed.split("\\s+".toRegex()).size
+            return "$wordCount words • $charCount characters"
+        }
+
+        fun calculateChecklistProgress(items: List<ChecklistItem>): String {
+            if (items.isEmpty()) return "0 completed"
+            val completedCount = items.count { it.isCompleted }
+            return "$completedCount of ${items.size} completed"
         }
     }
 }
